@@ -1,4 +1,4 @@
-# Contribution: [Issue Title]
+# Contribution: Compute rerank confidence after test-code demotion
 
 Path: `beat-2-contribution/contribution-story.md`
 
@@ -8,10 +8,9 @@ format criteria grade exactly that. Your course repo link is the whole submissio
 files and no evidence uploads are part of Assignment 5.
 
 **Contribution Number:** [1]
-**Student:** [Student name]
-**GitHub Username:** [your GitHub username, exactly as it appears on your profile - no @, no
-profile URL. Your comments upstream are identified by this name.]
-**Issue:** [GitHub issue link]
+**Student:** Jugal Bhaskar Naga Ganesh Boddu
+**GitHub Username:** Jugal-JG
+**Issue:** https://github.com/aakashsiwach/codeatlas-rag/issues/25
 **Pull Request:** [GitHub PR link, once opened]
 
 One repository, built across units 5 to 8, telling the whole story of your real
@@ -59,11 +58,9 @@ one in the week it belongs to.
 
 I installed the Unit 5 overlay over my issue-select skill (renamed issue-scout, my rubric kept) and wrote a search strategy: three `gh search issues` queries for Python AI/ML eval, RAG and scoring issues, each traced to a sentence of my fit profile, plus ranking filters (no assignee, updated within 60 days, at most 10 comments, fewest comments first). What broke first was the setup: `gh` wasn't installed on my Windows machine, so I installed it with winget and logged in. Then two of my three queries returned zero results when I ran them by hand, because GitHub requires every word to match and I had used multi-word terms; I changed them to single keywords ("retrieval", "scoring"), which now return 100 results each. My first scan found 233 issues, graded the top five, and accepted four, but it accepted goldener #437 even though a merged PR had already closed it, because my rubric only failed on open linked PRs. I patched the "Not already claimed" check to also fail on a merged PR that closes a still-open issue; I haven't re-run the scan to confirm the patch. Every beginner issue I vetted on the course site also had open PRs, so I tried pytorch/ao #3863, but the scout graded it reject (tracker-style scope, open PRs) and I moved to a different issue.
 
-**Unit 6: [one line on the tool work]**
+**Unit 6: Voice guard on my outgoing comments, a repo-memory file, and a patched scope check**
 
-[2-4 sentences: the voice-guard, the repo-memory file. What broke or
-fell short, and what changed because of it. "Nothing broke" counts when
-it is true - say how you know.]
+I merged my three voice-guide copies into one guide, added four upstream rules (claims, what I saw on the thread, questions, pings), and installed a hook that checks every `gh issue comment` body against it; it passed my claim on codeatlas-rag #25 and logged a `[hook] pass` line. Three things broke on Windows: symlinks need admin rights (so each skill now holds a one-line pointer to the guide), `python3` is a Store stub (so the hook calls `python`), and the guard's Python could not launch `claude.cmd` (so I patched the installed copy to find it). I also wrote a 29-line `CLAUDE.local.md` for the repo from one scoped read of the retrieval code, excluded from git through `.git/info/exclude`, and replaced my scope check with `scope-feasible`, which changed why pytorch/ao #3863 was rejected but not that it was.
 
 **Unit 7: [one line on the tool work]**
 
@@ -79,24 +76,18 @@ drafted, what you did with the draft.]
 
 ## Why I Chose This Issue
 
-[1-2 paragraphs in your own words: how you searched, what your scan
-surfaced, what your scout's verdict said, why this issue fits your
-profile, and what you hope to learn. If your scout's verdict on it
-was reject and you chose it anyway, say so here and say why; choosing
-against your own tool silently is what loses points. Close with an
-honest read of the tool itself: where the scout fell short on a real
-wild search and what you changed or would change, or what convinced
-you it held up. **Record the link to your claim comment in this section too.**
-Not claimed yet? Write `claim pending` and today's date where the link goes,
-and add the link the moment your claim lands.]
+I searched with three `gh search issues` queries built from my fit profile (Python, AI/ML evaluation, RAG and retrieval, scoring logic). The first scan found 233 unique issues, and the scout graded the top five. Its top-ranked issue, aakashsiwach/codeatlas-rag #25 ("Compute rerank confidence after test-code demotion"), was accepted. I then spent a while on the course Issue Selection site, where the AI/ML-looking issues I checked all already had open PRs or claims, and I briefly picked pytorch/ao #3863. My scout rejected it as a tracker-style issue with open PRs (and someone had already said they were working on it), so I dropped it and unclaimed it on the site.
+
+I chose codeatlas-rag #25 because it fits what I have already built: it is a bounded change to RAG retrieval and scoring (an opt-in `confidence_after_demotion` option in `Retriever.retrieve()`), the tests run offline with no GPU or API keys, and it has a clear dev-split measurement step like the evaluation harness I wrote before. My re-grade with the patched rubric accepted it with a difficulty note of moderate: the demotion logic is mine to find, and I have to pick a threshold on the dev split only while keeping the frozen 0.868 threshold. I hope to learn how a real RAG project enforces eval discipline (dev-only tuning, frozen thresholds) and how to contribute to a one-maintainer repo. The scout held up on the hard calls, but it missed things a real search needed: it passed an issue a merged PR had already closed, and my old scope check rejected most real issues, so I patched both. The risks I accepted are that the repo has 0 stars and a single owner, so responsiveness is unproven. I did not run the scan again after the patches, so I only know the patched rubric from the two issues I re-graded.
+
+Claim comment: https://github.com/aakashsiwach/codeatlas-rag/issues/25#issuecomment-7074099431
 
 **Toolkit**
 
-- Tool: issue-scout (your scout: your search strategy, your rubric),
-  and how you used it
-- What it produced: [the scan and its verdict on this issue, described]
-- Difficulties: [where it fell short, or "none met" if none did]
-- What changed: [what you patched or would update, or "nothing"]
+- Tool: issue-scout (my search strategy, my rubric), run as a scan and then as direct grades of my picks.
+- What it produced: a scan of 233 issues with five graded (four accepted, one rejected), ranking codeatlas-rag #25 first; the re-grade accepted #25 (moderate) and rejected pytorch/ao #3863.
+- Difficulties: two of my three queries returned zero results until I used single keywords; it accepted goldener #437 although a merged PR already closed it; my unit-1 scope check rejected most real issues; the search results carry no star count, so solo 0-star repos still rank high.
+- What changed: I fixed the queries, added a merged-PR clause to "Not already claimed", and replaced my scope check with `scope-feasible` plus a difficulty note (logged in scan-notes.md).
 
 ---
 
@@ -131,31 +122,90 @@ and add the link the moment your claim lands.]
 
 **Environment Setup**
 
-[What a stranger would need to stand this up: your operating system,
-the relevant versions (language, runtime, package manager, the project
-itself), and how you set the project up. Then the challenges you faced
-and how you solved them, or that none came up.]
+- OS: Windows 11 Home (10.0.26300). Python 3.14.4 (the repo requires 3.11+ and CI runs 3.11 and 3.12, so this is outside what CI tests). Node v25.9.0 (not used: the UI is not involved).
+- Project: my fork Jugal-JG/codeatlas-rag, cloned at upstream `main`, commit `bbd753e`.
+- Setup: `python -m venv .venv`, then `pip install -c requirements-lock.txt -e ".[dev]"`. I skipped the `local`, `openai` and `bedrock` extras because nothing here needs a model or API key.
+- `codeatlas doctor` on that setup: `ok python 3.14.4`, `warn index` (no index yet), and `fail` for the embedding model, the reranker (needs `torch`) and the LLM config. Those failures are expected with only `.[dev]`; the repro uses the hashing embedder and a fake reranker.
+- Baseline on that commit: `ruff check .` passed; `pytest -q` gave 151 passed, 7 skipped in 59 s.
+- Challenges: the first repro run failed because Qdrant needs UUID chunk ids (my test ids were plain strings); I switched to UUIDs. Otherwise none came up.
 
 **Steps to Reproduce**
 
-1. [Step 1]
-2. [Step 2]
-3. [Observed result]
+1. Save the script below as `repro_issue25.py` (it is not part of the repo) and, from the clone root, run `.venv\Scripts\python.exe repro_issue25.py`. It builds a `Retriever` with the offline hashing embedder, an in-memory Qdrant index and two chunks that both match the query: one test file (`src/test/java/PaymentServiceTest.java`) and one main file (`src/main/java/PaymentService.java`).
+2. It plugs in a fake reranker that returns fixed scores: +5.0 for the test chunk and -5.0 for the main chunk.
+3. It calls `retrieve()` with `RetrievalConfig.parse("hybrid+rerank")`, so `demote_tests` is on (the default). Observed: the final top chunk is the main file (rerank score -5.0), but the reported confidence is 0.9933 from source `rerank`, which is the demoted test chunk's score.
+
+```python
+r"""Repro for codeatlas-rag #25: with rerank on and demote_tests on (the default),
+the refusal confidence comes from the top chunk BEFORE test code is demoted.
+
+Offline: hashing embedder, in-memory Qdrant, a fake reranker with fixed scores.
+Run from the clone root:  .venv\Scripts\python.exe repro_issue25.py
+"""
+
+import uuid
+
+from qdrant_client import QdrantClient
+
+from codeatlas.embeddings import HashingEmbedder
+from codeatlas.models import Chunk
+from codeatlas.retrieval.reranker import sigmoid
+from codeatlas.retrieval.retriever import RetrievalConfig, Retriever
+from codeatlas.storage.vector_store import VectorStore
+
+TEXT = "retry the payment charge with exponential backoff"
+test_chunk = Chunk(str(uuid.uuid5(uuid.NAMESPACE_DNS, "t1")), "src/test/java/PaymentServiceTest.java", "method", TEXT, TEXT, 1, 5, symbol="T#retry")
+main_chunk = Chunk(str(uuid.uuid5(uuid.NAMESPACE_DNS, "m1")), "src/main/java/PaymentService.java", "method", TEXT + " main", TEXT + " main", 1, 5,
+                   symbol="P#charge")
+
+
+class FakeStore:
+    def all_chunks(self):
+        return [test_chunk, main_chunk]
+
+
+class FakeReranker:
+    """The cross-encoder loves the test chunk (+5.0) and dislikes the main chunk (-5.0)."""
+
+    def score(self, query, chunks):
+        return [5.0 if "/test/" in c.path else -5.0 for c in chunks]
+
+
+emb = HashingEmbedder()
+vectors = VectorStore(QdrantClient(location=":memory:"), "repro", emb.dim)
+vectors.upsert([test_chunk, main_chunk], emb.embed_documents([test_chunk.embed_text, main_chunk.embed_text]))
+r = Retriever(FakeStore(), vectors, emb, reranker=FakeReranker())
+r.refresh()
+
+cfg = RetrievalConfig.parse("hybrid+rerank")  # demote_tests defaults to True
+res = r.retrieve("how does the payment retry work", cfg)
+top = res.chunks[0]
+print("config:", cfg.name, "| demote_tests =", cfg.demote_tests)
+print("final top chunk:", top.chunk.path, "(rerank score %.1f)" % top.signals.get("rerank"))
+print("reported confidence: %.4f from source %r" % (res.confidence, res.confidence_source))
+print("sigmoid(rerank score of the final top chunk) would be: %.4f" % sigmoid(top.signals["rerank"]))
+```
 
 **Reproduction Evidence**
 
-- **Commit showing reproduction:** [link to commit in your fork]
-- **Screenshots/logs:** [if applicable]
-- **My findings:** [what you discovered during reproduction; an
-  honest, evidenced cannot-reproduce that led you to re-pick or ask
-  the maintainer belongs here and costs you nothing]
+- **Commit showing reproduction:** none (the script is inlined above, not committed to my fork).
+- **Screenshots/logs:**
+
+```
+config: hybrid+rerank | demote_tests = True
+final top chunk: src/main/java/PaymentService.java (rerank score -5.0)
+reported confidence: 0.9933 from source 'rerank'
+sigmoid(rerank score of the final top chunk) would be: 0.0067
+```
+
+- **My findings:** it matches the issue: `retrieve()` sets `confidence = sigmoid(scored[0].score)` right after reranking (`retriever.py` ~line 200) and only then moves test chunks down (~lines 202-203), so the confidence describes a chunk that is no longer on top. Per my reading of `answer.py` (I did not run the answer path), refusal reads that number. The scores are made up, so this shows the order of the two steps, not how often it happens or how big the effect is on real questions; I have not run the real reranker or the dev split (`eval/petclinic-dev.yaml`), so I claim nothing yet about the confidence distribution or refusal counts. I only tested the `rerank` path.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: repro-check (live mode, with my voice guide and the wild scope), run on my claim and repro report together; Claude Code to write and run the script.
+- What it produced: a reject on the first pass (Environment and Steps followable failed), then an accept after I fixed them.
+- Difficulties: it was right that the script was not inlined and that the bug template asks for the Node version and `codeatlas doctor`; it also caught a local path in the script docstring. It had no way to run my script, so it graded the text, not the result.
+- What changed: I inlined the script and run command, added Node and the doctor output, marked the answer-path claim as my reading of the code, and removed the local path.
 
 ---
 
