@@ -66,10 +66,9 @@ I merged my three voice-guide copies into one guide, added four upstream rules (
 
 My manifest runs the two checks CONTRIBUTING.md names (`ruff check .` and `pytest -q`), and on my branch the ship-gate passed both (155 passed, 7 skipped) and my pr-precheck accepted it, with one preferred check failing: my "Generated files regenerated" box was ticked with no output behind it. I fixed that by adding the script output to my test evidence, and I softened a "does nothing when demote_tests is off" claim in the PR text and changelog, because the outline reorder can still move the top chunk. On Windows the install needed three fixes: the hook used `python3` (a Store stub), the gate's Python could not launch `claude.cmd`, and the manifest needed `.venv\Scripts\python.exe -m ...` instead of `.venv/bin/...`.
 
-**Unit 8: [one line on the tool work]**
+**Unit 8: PR monitor and a playbook built from the repo's own rhythm**
 
-[2-4 sentences: the PR-monitor and your playbook. What it read, what it
-drafted, what you did with the draft.]
+I installed the PR monitor (patched, like my other tools, to launch `claude.cmd` on Windows) and its `--state` run read PR #38 correctly: quiet, mergeable, no reviews, no checks reported. Researching my playbook showed the repo has no outside-contributor PRs to measure (all 21 are Dependabot PRs that merge in under a day), so I based my 10-day first-review threshold on the owner's own bursts of activity about 6 days apart, and I found the PR's CI run is `action_required`, waiting for the owner to approve it, which the monitor's report does not show. The full run drafted a wait note, not a nudge, because the PR was about 14 minutes old and my own threshold was nowhere near met, so I posted nothing and kept the CI rule in my playbook to check on the Actions tab myself on the nudge date.
 
 ---
 
@@ -197,7 +196,7 @@ reported confidence: 0.9933 from source 'rerank'
 sigmoid(rerank score of the final top chunk) would be: 0.0067
 ```
 
-- **My findings:** it matches the issue: `retrieve()` sets `confidence = sigmoid(scored[0].score)` right after reranking (`retriever.py` ~line 200) and only then moves test chunks down (~lines 202-203), so the confidence describes a chunk that is no longer on top. Per my reading of `answer.py` (I did not run the answer path), refusal reads that number. The scores are made up, so this shows the order of the two steps, not how often it happens or how big the effect is on real questions; I have not run the real reranker or the dev split (`eval/petclinic-dev.yaml`), so I claim nothing yet about the confidence distribution or refusal counts. I only tested the `rerank` path.
+- **My findings:** it matches the issue: `retrieve()` sets `confidence = sigmoid(scored[0].score)` right after reranking (`retriever.py` ~line 200) and only then moves test chunks down (~lines 202-203), so the confidence describes a chunk that is no longer on top. Per my reading of `answer.py` (I did not run the answer path), refusal reads that number. The scores are made up, so this shows the order of the two steps, not how often it happens or how big the effect is on real questions; At the time of this repro I had not run the real reranker or the dev split (`eval/petclinic-dev.yaml`), so I claimed nothing about the confidence distribution or refusal counts; I measured that later and report it under Testing Strategy. I only tested the `rerank` path.
 
 **Toolkit**
 
@@ -218,7 +217,7 @@ In `Retriever.retrieve()` (`codeatlas/retrieval/retriever.py`), when `cfg.rerank
 
 Add an opt-in option `confidence_after_demotion` (bool, default False) to `RetrievalConfig` and to `OPTIONS`, so it can be set with `-o confidence_after_demotion=on` and shows in the config name. When it is on and reranking ran, recompute the confidence as `sigmoid(scored[0].score)` from the final top chunk after demotion and the outline reorder, just before `results` is cut, and keep `confidence_source` as `rerank`.
 
-What I am deliberately not changing: the option stays off by default (making it the default needs a new held-out split, per the issue); the frozen 0.868 threshold and the README numbers are untouched; the vector and bm25 confidence paths are unchanged (the issue is about the rerank confidence); the graph expansion still does not affect confidence; nothing in `eval/petclinic-test.yaml`. When `demote_tests` is off or the query is about tests, the option changes nothing.
+What I am deliberately not changing: the option stays off by default (making it the default needs a new held-out split, per the issue); the frozen 0.868 threshold and the README numbers are untouched; the vector and bm25 confidence paths are unchanged (the issue is about the rerank confidence); the graph expansion still does not affect confidence; nothing in `eval/petclinic-test.yaml`. The option changes the confidence only when test demotion or the outline reorder changes which chunk is first (so not with `demote_tests` off, or for a query about tests, in my tests).
 
 **Implementation Plan**
 
@@ -228,8 +227,7 @@ What I am deliberately not changing: the option stays off by default (making it 
 4. Run `ruff check .` and `pytest -q`, and rerun my repro script before and after: with the option on, the repro should report about 0.0067 (`sigmoid(-5.0)`) instead of 0.9933. I checked that `answer.py`, `cli.py` and `eval/runner.py` only read `RetrievalResult.confidence`, so the change stays inside `retrieve()`.
 5. The issue's Scope says to "choose a threshold on the dev split" while its acceptance criteria freeze 0.868. I read that as: keep 0.868 and only report the on/off confidence ranges and refusal counts on dev (the eval report already prints them), and I will say that reading in the PR. Try the dev-split measurement from the issue (`eval/petclinic-dev.yaml`, option on and off, rerank on): report answerable and unanswerable confidence ranges and refusal counts. If the real reranker cannot run on my machine, say so in the PR instead of reporting numbers I did not measure.
 
-[Record deviations here as they happen: what changed mid-build and
-why. A recorded deviation is honest work; silent drift is not.]
+Deviations: none from steps 1 to 4. Step 5 (the dev-split measurement) ran after my first ship-gate pass, on a separate Python 3.11 environment; I then added the numbers to the PR text and test evidence and ran the ship-gate again. I also squashed my three local commits into two before opening the PR, only to remove a co-author line from the messages; the code did not change.
 
 **Toolkit**
 
@@ -272,8 +270,7 @@ Built the fix on branch `fix/25-confidence-after-demotion`: a `confidence_after_
 
 **2026-11-21**
 
-Wrong turn: I first tested my manifest commands through Git Bash with `cmd.exe /c`, and it hung; the same commands ran fine from PowerShell. 
-
+Wrong turn: I first tested my manifest commands through Git Bash with `cmd.exe /c`, and it hung; the same commands ran fine from PowerShell.
 
 **2026-11-22**
 
@@ -283,6 +280,13 @@ Ran the dev-split measurement the issue asks for. Python 3.14 has no torch build
 
 My voice guard stopped my PR description for ticking "No secrets in the diff" with no output behind it. I added the diff stat, a count of touched `eval/` files (0) and a grep for secret-like patterns (0) to my test evidence and to the checklist lines.
 
+**2026-11-22**
+
+Squashed my local commits into two to remove a `Co-Authored-By` line that had been added to the messages, force-pushed the branch to my own fork (no PR existed yet), and opened PR #38 against `aakashsiwach:main` from GitHub's website. It shows 2 commits, 3 files. Its CI run is `action_required`, so nothing has run on it yet.
+
+**2026-11-22**
+
+Installed the PR monitor, wrote my playbook, and ran it: `--state` showed a quiet, mergeable PR with no reviews, and the full run drafted a wait note. I sent nothing, because my own rule says to nudge only after 10 quiet days with no reply.
 **Toolkit**
 
 - Tool: Claude Code to read the repo and write the change and tests, with my plan.md and the repo's own checks as the guard rails.
@@ -300,7 +304,7 @@ My voice guard stopped my PR description for ticking "No secrets in the diff" wi
 
 **Maintainer Feedback:**
 
-- 2026-11-22: none yet (the PR was just opened).
+- 2026-11-22: none yet. The PR is under a day old with no comments or reviews, and its CI run is `action_required` (waiting for the owner to approve it for a first-time contributor). I ran my PR monitor; it drafted a wait note, not a nudge, because my playbook's first-review threshold is 10 quiet days. I posted nothing.
 
 **Status:** Awaiting review
 
@@ -309,7 +313,7 @@ My voice guard stopped my PR description for ticking "No secrets in the diff" wi
 - Tool: the ship-gate (my manifest's `ruff check .` and `pytest -q`, then my pr-precheck on the branch, plan, evidence and description), run by hand twice, plus my voice guard on the description.
 - What it produced: two PASS runs. The first accepted the branch with one preferred check failing (a ticked "generated files" box with no output); the second, after I added the evidence and fixed the claims, passed every check.
 - Difficulties: it was right about an overclaim ("does nothing when demote_tests is off"), and my voice guard stopped a ticked "no secrets" box with nothing behind it. I also opened the PR from GitHub's website, so neither hook ran on the opening step itself (they had run by hand on the same text), and the title on GitHub differs from the one I prepared.
-- What changed: I backed each checklist box with output, softened the wording, and corrected the AI disclosure to say Claude Code ran the full set while I re-ran the two repo checks and reviewed the diff. I also removed a "Co-Authored-By: Claude" line I had let into the commit messages, and force-pushed the cleaned branch to my own fork before opening the PR.
+- What changed: I backed each checklist box with output, softened the wording, and corrected the AI disclosure to say Claude Code ran the full set while I re-ran the two repo checks and reviewed the diff.
 
 ---
 
@@ -317,25 +321,21 @@ My voice guard stopped my PR description for ticking "No secrets in the diff" wi
 
 **Technical Skills Gained**
 
-[What you learned technically, named concretely.]
+I learned how this project's refusal logic works end to end: a cross-encoder rerank score goes through `sigmoid` into a confidence, which `Answerer.is_low_confidence` compares to a frozen threshold (0.868), and test-code demotion can change which chunk is first after that number is taken. I learned to test that kind of ordering bug offline, with a fake reranker and fixed scores, and to prove a test is real by stashing the fix and watching all four fail. I also learned to read an eval report's per-question JSON to get confidence ranges and refusal counts, and that a clean result (identical refusals on dev) is a legitimate thing to report.
 
 **Challenges Overcome**
 
-[What was hard and how you solved it; point at the real events, the
-Toolkit blocks above are full of them.]
+Finding an issue was the hard part: my scout's top pick was fine, but every AI/ML issue I checked on the course site already had open PRs or claims, and the one I briefly chose (pytorch/ao #3863) was rejected by my own scout, so I switched to a cleaner issue and unclaimed it. Setting up the tools on Windows took several fixes (symlinks, `python3` as a Store stub, launching `claude.cmd`, venv paths in the manifest). The dev-split measurement needed a separate Python 3.11 environment with CPU torch and about 700 MB of models. My own voice guard and ship-gate pushed back on real mistakes: a ticked checklist box with no output, and an overclaim about when the option changes nothing.
 
 **What I'd Do Differently Next Time**
 
-[Reflection on your process.]
+I would ask before committing and before adding anything to a commit message: a Co-Authored-By line I had not noticed showed up on GitHub and I had to rewrite my branch. I would run the real measurement earlier, before writing the PR text, instead of first writing "not measured" and then redoing the text. I would open the PR through Claude Code, not the website, so both hooks run on the opening step itself. And I would check for repos with outside-contributor PRs before relying on a review-wait number, since this repo had none and I had to use the owner's activity pattern instead.
 
 ---
 
 ## Resources Used
 
-[What actually helped, not a reading list. List things this story
-already shows you using: the doc you followed to set the environment
-up, the thread that explained the bug, the person who answered you.
-One real entry beats ten plausible ones.]
-
-- [Link to documentation that helped]
-- [Discussion, issue, or post that helped]
+- The repo's CONTRIBUTING.md, which gave the exact checks (`ruff check .`, `pytest -q`), the evaluation rules (dev only, frozen thresholds) and the PR steps: https://github.com/aakashsiwach/codeatlas-rag/blob/main/CONTRIBUTING.md
+- The repo's docs/evaluation.md, which gave the PetClinic setup commit (500158f), the eval commands and the dev numbers I checked mine against: https://github.com/aakashsiwach/codeatlas-rag/blob/main/docs/evaluation.md
+- The issue itself, whose acceptance criteria defined the work: https://github.com/aakashsiwach/codeatlas-rag/issues/25
+- The repo's PR template (`.github/PULL_REQUEST_TEMPLATE.md`), which I answered item by item in the PR description.
