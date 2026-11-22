@@ -11,7 +11,7 @@ files and no evidence uploads are part of Assignment 5.
 **Student:** Jugal Bhaskar Naga Ganesh Boddu
 **GitHub Username:** Jugal-JG
 **Issue:** https://github.com/aakashsiwach/codeatlas-rag/issues/25
-**Pull Request:** [GitHub PR link, once opened]
+**Pull Request:** https://github.com/aakashsiwach/codeatlas-rag/pull/38
 
 One repository, built across units 5 to 8, telling the whole story of your real
 contribution. Fill it as you work, not at the end — the sections below ask for evidence that
@@ -62,10 +62,9 @@ I installed the Unit 5 overlay over my issue-select skill (renamed issue-scout, 
 
 I merged my three voice-guide copies into one guide, added four upstream rules (claims, what I saw on the thread, questions, pings), and installed a hook that checks every `gh issue comment` body against it; it passed my claim on codeatlas-rag #25 and logged a `[hook] pass` line. Three things broke on Windows: symlinks need admin rights (so each skill now holds a one-line pointer to the guide), `python3` is a Store stub (so the hook calls `python`), and the guard's Python could not launch `claude.cmd` (so I patched the installed copy to find it). I also wrote a 29-line `CLAUDE.local.md` for the repo from one scoped read of the retrieval code, excluded from git through `.git/info/exclude`, and replaced my scope check with `scope-feasible`, which changed why pytorch/ao #3863 was rejected but not that it was.
 
-**Unit 7: [one line on the tool work]**
+**Unit 7: Ship-gate and manifest that run the repo's checks and my pr-precheck on my branch**
 
-[2-4 sentences: the ship-gate and your gate manifest. What it produced
-on your real branch, what fought you, what changed because of it.]
+My manifest runs the two checks CONTRIBUTING.md names (`ruff check .` and `pytest -q`), and on my branch the ship-gate passed both (155 passed, 7 skipped) and my pr-precheck accepted it, with one preferred check failing: my "Generated files regenerated" box was ticked with no output behind it. I fixed that by adding the script output to my test evidence, and I softened a "does nothing when demote_tests is off" claim in the PR text and changelog, because the outline reorder can still move the top chunk. On Windows the install needed three fixes: the hook used `python3` (a Store stub), the gate's Python could not launch `claude.cmd`, and the manifest needed `.venv\Scripts\python.exe -m ...` instead of `.venv/bin/...`.
 
 **Unit 8: [one line on the tool work]**
 
@@ -95,26 +94,26 @@ Claim comment: https://github.com/aakashsiwach/codeatlas-rag/issues/25#issuecomm
 
 **Problem Description**
 
-[In your own words, what is broken or missing?]
+When the retriever reranks and also pushes test code below main code, the "how sure am I?" number it reports is read from the top chunk before the test code is pushed down. That chunk may no longer be on top, so the confidence (which the answer step compares to a refusal threshold) describes the wrong chunk.
 
 **Expected Behavior**
 
-[What should happen?]
+The confidence should describe the chunk that is actually first in the final results, at least when a caller opts in. The issue asks for an opt-in option, `confidence_after_demotion`, that is off by default, so nothing changes for anyone who does not turn it on.
 
 **Current Behavior**
 
-[What actually happens?]
+With rerank on and test demotion on (both are how the project is normally run), `retrieve()` sets the confidence from the reranked top chunk and only then moves test chunks down. In my offline repro a test chunk scored +5.0 and the main-code chunk that ended up first scored -5.0, but the reported confidence was 0.9933, the test chunk's score.
 
 **Affected Components**
 
-[Which parts of the codebase are involved?]
+`codeatlas/retrieval/retriever.py` (`RetrievalConfig`, its `OPTIONS` list, and `Retriever.retrieve()`), the refusal logic in `codeatlas/answer.py` that reads `confidence`, the tests in `tests/test_retrieval_and_answers.py`, the `CHANGELOG.md`, and the dev eval set `eval/petclinic-dev.yaml` for the on/off measurement the issue asks for.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: Claude Code for reading the retrieval code and the issue, and my CLAUDE.local.md memory file for the repo's rules.
+- What it produced: the location of the bug (`retriever.py` ~line 200 versus ~202-203) and the list of files the change would touch.
+- Difficulties: the issue says "rerank confidence" but the vector confidence is also taken before demotion; I had to decide to keep the change to the rerank path, as the issue's wording asks.
+- What changed: nothing yet; I wrote that decision into the plan as something I am not changing.
 
 ---
 
@@ -213,93 +212,104 @@ sigmoid(rerank score of the final top chunk) would be: 0.0067
 
 **Analysis**
 
-[Your analysis of the root cause: what is causing the issue, traced
-to the files and functions involved.]
+In `Retriever.retrieve()` (`codeatlas/retrieval/retriever.py`), when `cfg.rerank` is on the confidence is set right after the cross-encoder sorts the pool: `confidence, source = (sigmoid(scored[0].score), "rerank")` (~line 200). Only afterwards does `_tests_last(scored)` move test chunks below main code (~lines 202-203), and `_outlines_after_methods` may reorder again (~line 206). `results = scored[: cfg.k]` is then cut from the reordered list. So when the best-scoring chunk is test code, the reported confidence is that chunk's score even though a different chunk is first in the final results. `Answerer.is_low_confidence` in `codeatlas/answer.py` compares `rr.confidence` to the refusal threshold for source `rerank`, so the refusal decision can follow a chunk that is no longer on top. My offline repro (fake reranker: test chunk +5.0, main chunk -5.0) shows a final top chunk at -5.0 with a reported confidence of 0.9933.
 
 **Proposed Solution**
 
-[High-level description of your fix approach, and what you are
-deliberately NOT changing.]
+Add an opt-in option `confidence_after_demotion` (bool, default False) to `RetrievalConfig` and to `OPTIONS`, so it can be set with `-o confidence_after_demotion=on` and shows in the config name. When it is on and reranking ran, recompute the confidence as `sigmoid(scored[0].score)` from the final top chunk after demotion and the outline reorder, just before `results` is cut, and keep `confidence_source` as `rerank`.
+
+What I am deliberately not changing: the option stays off by default (making it the default needs a new held-out split, per the issue); the frozen 0.868 threshold and the README numbers are untouched; the vector and bm25 confidence paths are unchanged (the issue is about the rerank confidence); the graph expansion still does not affect confidence; nothing in `eval/petclinic-test.yaml`. When `demote_tests` is off or the query is about tests, the option changes nothing.
 
 **Implementation Plan**
 
-1. [Modify file X to do Y]
-2. [Add or change Z]
-3. [Update tests]
+1. `codeatlas/retrieval/retriever.py`: add the `confidence_after_demotion: bool = False` field, add it to `OPTIONS`, and add the small recompute step before `results = scored[: cfg.k]`.
+2. `tests/test_retrieval_and_answers.py`: add tests that fail without the fix, using a fake reranker: option off keeps the old confidence, option on reports the final top chunk's score, the option is a no-op when `demote_tests` is off or the query is about tests, option parsing and the config name include it, and the vector-only confidence is unchanged.
+3. `CHANGELOG.md`: an entry under `[Unreleased]`. Check that `python scripts/gen_config_docs.py` and `python scripts/export_openapi.py` produce no diff (`RetrievalConfig` is not part of `Settings`).
+4. Run `ruff check .` and `pytest -q`, and rerun my repro script before and after: with the option on, the repro should report about 0.0067 (`sigmoid(-5.0)`) instead of 0.9933. I checked that `answer.py`, `cli.py` and `eval/runner.py` only read `RetrievalResult.confidence`, so the change stays inside `retrieve()`.
+5. The issue's Scope says to "choose a threshold on the dev split" while its acceptance criteria freeze 0.868. I read that as: keep 0.868 and only report the on/off confidence ranges and refusal counts on dev (the eval report already prints them), and I will say that reading in the PR. Try the dev-split measurement from the issue (`eval/petclinic-dev.yaml`, option on and off, rerank on): report answerable and unanswerable confidence ranges and refusal counts. If the real reranker cannot run on my machine, say so in the PR instead of reporting numbers I did not measure.
 
 [Record deviations here as they happen: what changed mid-build and
 why. A recorded deviation is honest work; silent drift is not.]
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: plan-check (live mode, with my voice guide and the wild scope), run on plan.md and a draft plan comment.
+- What it produced: an accept on the first run, with the code line numbers in my plan confirmed against `retriever.py`, and three suggestions.
+- Difficulties: it graded text against the repo, not my code; its `procedure.md` had gaps it named itself (no step for live mode without a posted repro, no control-run step, a read order that expects a repo-facts block).
+- What changed: I added the expected after-fix number (about 0.0067) to the test plan, wrote down how I read the issue's "choose a threshold on dev" against its frozen 0.868, and checked that only `retrieve()` produces the confidence. I did not post the plan comment, as the assignment says.
 
 ---
 
 ## Testing Strategy
 
-[What observable checks prove the fix: your reproduction steps re-run
-against the built change (before and after), and the repo's own test
-suite or checks with the outcome shown. "Tests pass" with nothing
-observable named is not a strategy.]
+1. **Reproduction before and after.** My repro script (fake reranker: test chunk +5.0, main chunk -5.0) on the branch, with the option off, still prints `reported confidence: 0.9933 from source 'rerank'`, as on main. With `confidence_after_demotion=True` it prints `0.0067`, which is `sigmoid(-5.0)`, the score of the chunk that is first. The final top chunk is the same file in both runs, so the ranking is unchanged and only the confidence differs.
+2. **New tests that fail without the fix.** Four tests in `tests/test_retrieval_and_answers.py`: option off keeps `sigmoid(5.0)`, option on gives `sigmoid(-5.0)` with the same chunk order; no change when `demote_tests` is off or the query is about tests; the vector-only confidence is untouched; the option parses, defaults off and appears in the config name. With `retriever.py` stashed they give `4 failed`; with the fix, `4 passed`.
+3. **The repo's own checks** (CONTRIBUTING.md): `ruff check .` printed `All checks passed!` and `pytest -q` gave `155 passed, 7 skipped` (151 passed, 7 skipped on main before my change). I also regenerated `docs/configuration.md` and `docs/openapi.json`; the only difference was Windows line endings, so I left those files unchanged.
+4. **Dev-split measurement with the real reranker** (the issue's acceptance criterion): on Spring PetClinic 500158f, CodeAtlas 6cacc64, Python 3.11 with CPU torch, `eval/petclinic-dev.yaml` (40 questions: 33 answerable, 7 unanswerable) with `hybrid+rerank`, option off versus `-o confidence_after_demotion=on`. Retrieval is identical (recall@5 0.889, MRR 0.806, the numbers docs/evaluation.md documents, same retrieved lists for all 40). The confidence ranges are identical too (answerable 0.8336 to 0.9609, median 0.9238; unanswerable 0.4890 to 0.8661, median 0.8094) and so are the refusal counts at 0.868 (4 of 33 answerable and 7 of 7 unanswerable below it, both runs). The option did change the confidence on 8 of 40 questions, all answerable and all slightly lower (largest: 0.9590 to 0.9305), and none crossed 0.868. I did not run the test split.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: ruff and pytest from the repo's own checks, my repro script, and the ship-gate manifest that runs the two checks in a fresh terminal.
+- What it produced: `test_evidence.md` with the before and after repro output and the check results, and a manifest that parses and runs both checks.
+- Difficulties: the manifest's `.venv/bin/pytest` form does not exist on Windows, so I used `.venv\Scripts\python.exe -m pytest -q`; testing it through Git Bash and `cmd.exe` hung, and it worked from PowerShell.
+- What changed: the manifest uses the Windows form of each command, and I restored the regenerated docs files after checking they had no real changes.
 
 ---
 
 ## Implementation Notes
 
-[A running log, added to as you work. Date each entry. What you
-built, decisions you made when you made them, wrong turns included.]
+**2026-11-21**
 
-**[Date]**
+Reproduced the issue offline with a fake reranker. My first run failed because Qdrant needs UUID chunk ids; switched to `uuid5` ids. The repro showed a final top chunk at -5.0 with a reported confidence of 0.9933.
 
-[Entry]
+**2026-11-21**
 
-**[Date]**
+Wrote the plan and checked it with plan-check (accept). Decided to put the new confidence right before `results = scored[: cfg.k]`, after both the test demotion and the outline reorder, because the issue is that the confidence should describe the chunk that is actually first, and the outline reorder can also move the top chunk. I did not post the plan comment on the issue.
 
-[Entry]
+**2026-11-21**
+
+Built the fix on branch `fix/25-confidence-after-demotion`: a `confidence_after_demotion` field (default off) and an `OPTIONS` entry, plus a three-line recompute step in `retrieve()`. Wrote four tests with a fake reranker, confirmed all four fail with `retriever.py` stashed and pass with it, added the `CHANGELOG.md` entry, and made two commits locally (nothing pushed yet). `scripts/gen_config_docs.py` and `scripts/export_openapi.py` only changed line endings, so I restored those files.
+
+**2026-11-21**
+
+Wrong turn: I first tested my manifest commands through Git Bash with `cmd.exe /c`, and it hung; the same commands ran fine from PowerShell. 
+
+
+**2026-11-22**
+
+Ran the dev-split measurement the issue asks for. Python 3.14 has no torch build I could use, so I made a separate 3.11 venv with CPU torch, cloned PetClinic at 500158f (git-ignored `repos/`), indexed it and ran `eval/petclinic-dev.yaml` with `hybrid+rerank`, option off and on. Result: identical retrieval, identical ranges and refusal counts, and 8 of 40 answerable questions with a slightly lower confidence, none crossing 0.868. Plain finding, not the dramatic one I might have hoped for: on dev the option does not change any refusal decision. I wrote it into the PR as it is.
+
+**2026-11-22**
+
+My voice guard stopped my PR description for ticking "No secrets in the diff" with no output behind it. I added the diff stat, a count of touched `eval/` files (0) and a grep for secret-like patterns (0) to my test evidence and to the checklist lines.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: Claude Code to read the repo and write the change and tests, with my plan.md and the repo's own checks as the guard rails.
+- What it produced: a 17-line source change, four tests, a changelog entry and the evidence file.
+- Difficulties: Windows (line endings in regenerated files, Git Bash versus PowerShell for commands) and a Python 3.14 venv that CI does not cover.
+- What changed: I kept every change inside the plan and restored the unrelated regenerated files, so the diff holds only the option, its tests and the changelog.
 
 ---
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when opened]
+**PR Link:** https://github.com/aakashsiwach/codeatlas-rag/pull/38
 
-**PR Description:** [what the PR says; much of the content above
-adapts into it]
+**PR Description:** The PR (title on GitHub: "Fix/25 confidence after demotion"; it is `Fixes #25`) adds an opt-in `confidence_after_demotion` ranking option, off by default, so that with rerank on the reported confidence comes from the chunk that is first after test demotion instead of the chunk demotion moved down. It lists what I left alone (default off, the frozen 0.868 threshold, the README numbers, the vector and bm25 confidence, the test split) and flags one reading of the issue's wording about choosing a threshold on dev. Its testing section has the offline repro before and after (0.9933 to 0.0067), `ruff check .` clean, `pytest -q` at 155 passed and 7 skipped, the four new tests failing without the change, and the real dev-split run on PetClinic: identical retrieval, ranges and refusal counts, with the confidence slightly lower on 8 of 40 answerable questions and no refusal flipped. It ends with an AI disclosure in my own words and a checklist where every ticked box has output behind it. The diff is 3 files: `retriever.py`, the tests and `CHANGELOG.md`.
 
 **Maintainer Feedback:**
 
-- [Date]: [feedback received, or "none yet"; silence is a normal
-  state and costs you nothing]
-- [Date]: [how you addressed it]
+- 2026-11-22: none yet (the PR was just opened).
 
-**Status:** [Awaiting review / Iterating / Merged / Closed. The
-status is a fact you record, never a grade: the PR is graded as
-opened.]
+**Status:** Awaiting review
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: the ship-gate (my manifest's `ruff check .` and `pytest -q`, then my pr-precheck on the branch, plan, evidence and description), run by hand twice, plus my voice guard on the description.
+- What it produced: two PASS runs. The first accepted the branch with one preferred check failing (a ticked "generated files" box with no output); the second, after I added the evidence and fixed the claims, passed every check.
+- Difficulties: it was right about an overclaim ("does nothing when demote_tests is off"), and my voice guard stopped a ticked "no secrets" box with nothing behind it. I also opened the PR from GitHub's website, so neither hook ran on the opening step itself (they had run by hand on the same text), and the title on GitHub differs from the one I prepared.
+- What changed: I backed each checklist box with output, softened the wording, and corrected the AI disclosure to say Claude Code ran the full set while I re-ran the two repo checks and reviewed the diff. I also removed a "Co-Authored-By: Claude" line I had let into the commit messages, and force-pushed the cleaned branch to my own fork before opening the PR.
 
 ---
 
