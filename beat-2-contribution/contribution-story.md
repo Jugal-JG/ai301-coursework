@@ -55,10 +55,9 @@ happened; these entries are the toolkit's own timeline.
 All four entries are graded. Keep every heading below, and fill each
 one in the week it belongs to.
 
-**Unit 5: [one line on the tool work]**
+**Unit 5: Grew my issue-select skill into issue-scout with my own search strategy**
 
-[2-4 sentences: what you built (the scout, your strategy), what broke
-or fell short, what changed because of it.]
+I installed the Unit 5 overlay over my issue-select skill (renamed issue-scout, my rubric kept) and wrote a search strategy: three `gh search issues` queries for Python AI/ML eval, RAG and scoring issues, each traced to a sentence of my fit profile, plus ranking filters (no assignee, updated within 60 days, at most 10 comments, fewest comments first). What broke first was the setup: `gh` wasn't installed on my Windows machine, so I installed it with winget and logged in. Then two of my three queries returned zero results when I ran them by hand, because GitHub requires every word to match and I had used multi-word terms; I changed them to single keywords ("retrieval", "scoring"), which now return 100 results each. My first scan found 233 issues, graded the top five, and accepted four, but it accepted goldener #437 even though a merged PR had already closed it, because my rubric only failed on open linked PRs. I patched the "Not already claimed" check to also fail on a merged PR that closes a still-open issue; I haven't re-run the scan to confirm the patch. Every beginner issue I vetted on the course site also had open PRs, so I tried pytorch/ao #3863, but the scout graded it reject (tracker-style scope, open PRs) and I moved to a different issue.
 
 **Unit 6: [one line on the tool work]**
 
